@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Env files
+.env
+.env.local
+.env.*.local
+.env.test
+backend/.env
+backend/.env.test
+frontend/.env
+
+# Build output
+dist/
+build/
+frontend/dist/
+backend/dist/
+
+# Prisma
+backend/prisma/dev.db
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Uploaded documents (runtime data, not source)
+backend/uploads/
+
+# Misc
+*.local

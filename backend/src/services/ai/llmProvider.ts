@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { aiIsConfigured, env } from "../../config/env";
+import { GoogleGenAI } from "@google/genai";
+import { env } from "../../config/env";
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -40,6 +41,38 @@ class AnthropicProvider implements LLMProvider {
   }
 }
 
+class GeminiProvider implements LLMProvider {
+  readonly name = "gemini";
+  readonly isConfigured = true;
+  private client: GoogleGenAI;
+
+  constructor() {
+    this.client = new GoogleGenAI({ apiKey: env.geminiApiKey });
+  }
+
+  async generate({ system, messages, maxTokens = 1024 }: GenerateParams): Promise<string> {
+    const response = await this.client.models.generateContent({
+      model: env.geminiModel,
+      contents: messages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      })),
+      config: {
+        systemInstruction: system,
+        // Gemini's "thinking" models spend part of the output token budget
+        // on internal reasoning before the visible answer, which can
+        // silently truncate short responses if the budget is too tight.
+        // (thinkingConfig.thinkingBudget: 0 would disable it outright, but
+        // not every model in this family accepts that value, so the safer
+        // fix is giving enough headroom for both thinking and the answer.)
+        maxOutputTokens: maxTokens * 4,
+      },
+    });
+
+    return response.text ?? "";
+  }
+}
+
 /**
  * Used only when no AI_PROVIDER credential is configured. It never
  * fabricates a real answer — it returns a clear, honest message so the
@@ -52,10 +85,11 @@ class UnconfiguredProvider implements LLMProvider {
 
   async generate(): Promise<string> {
     return (
-      "The AI Tutor is not fully configured yet: no ANTHROPIC_API_KEY was found in the " +
+      "The AI Tutor is not fully configured yet: no LLM provider credential was found in the " +
       "backend environment. Retrieval over course material is still working (see the sources " +
       "below), but generating a natural-language answer requires an LLM provider. Set " +
-      "AI_PROVIDER=anthropic and ANTHROPIC_API_KEY in backend/.env, then restart the server."
+      "AI_PROVIDER=anthropic (with ANTHROPIC_API_KEY) or AI_PROVIDER=gemini (with GEMINI_API_KEY) " +
+      "in backend/.env, then restart the server."
     );
   }
 }
@@ -64,6 +98,12 @@ let cached: LLMProvider | null = null;
 
 export function getLLMProvider(): LLMProvider {
   if (cached) return cached;
-  cached = aiIsConfigured ? new AnthropicProvider() : new UnconfiguredProvider();
+  if (env.aiProvider === "anthropic" && env.anthropicApiKey.length > 0) {
+    cached = new AnthropicProvider();
+  } else if (env.aiProvider === "gemini" && env.geminiApiKey.length > 0) {
+    cached = new GeminiProvider();
+  } else {
+    cached = new UnconfiguredProvider();
+  }
   return cached;
 }

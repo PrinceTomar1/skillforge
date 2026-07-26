@@ -2,14 +2,34 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/errors";
 import { getLLMProvider } from "./llmProvider";
-import { retrieveRelevantChunks } from "./retrieval";
 import { logActivity } from "../activityService";
 
-async function buildContext(courseId: string, lessonId: string | undefined, query: string) {
-  const chunks = await retrieveRelevantChunks({ query, courseId, topK: lessonId ? 6 : 10 });
-  const scoped = lessonId ? chunks.filter((c) => c.lessonId === lessonId) : chunks;
-  const pool = scoped.length > 0 ? scoped : chunks;
-  return pool.map((c, i) => `[${i + 1}] ${c.content}`).join("\n\n");
+const MAX_CONTEXT_CHUNKS = 24;
+
+/**
+ * Study-resource generation needs "all the material for this known scope"
+ * (a lesson, or the whole course), not a similarity search against a guessed
+ * query — unlike the AI Tutor, there's no real user question to match
+ * against here. Fetching chunks directly by scope avoids the failure mode
+ * where a generic synthetic query scores below the retrieval similarity
+ * threshold and silently returns nothing, even though the material exists
+ * and was successfully ingested.
+ */
+async function buildContext(courseId: string, lessonId: string | undefined): Promise<string> {
+  const chunks = await prisma.documentChunk.findMany({
+    where: {
+      document: {
+        status: "READY",
+        courseId,
+        ...(lessonId ? { lessonId } : {}),
+      },
+    },
+    orderBy: [{ documentId: "asc" }, { chunkIndex: "asc" }],
+    take: MAX_CONTEXT_CHUNKS,
+    select: { content: true },
+  });
+
+  return chunks.map((c, i) => `[${i + 1}] ${c.content}`).join("\n\n");
 }
 
 function extractJson(text: string): unknown {
@@ -96,13 +116,13 @@ export async function generateStudyResource(params: {
       aiConfigured: false,
       resource: null,
       message:
-        "AI generation is not configured on this server (missing ANTHROPIC_API_KEY). Set it in backend/.env and restart to enable this feature.",
+        "AI generation is not configured on this server (no LLM provider credential found). Set AI_PROVIDER + a matching API key in backend/.env and restart to enable this feature.",
     };
   }
 
   const lesson = params.lessonId ? await prisma.lesson.findUnique({ where: { id: params.lessonId } }) : null;
   const focusLabel = lesson ? `${course.title} — ${lesson.title}` : course.title;
-  const context = await buildContext(params.courseId, params.lessonId, `${focusLabel} key concepts overview`);
+  const context = await buildContext(params.courseId, params.lessonId);
 
   if (!context.trim()) {
     return {
@@ -174,11 +194,11 @@ export async function generateQuizForLesson(params: {
   if (!llm.isConfigured) {
     return {
       aiConfigured: false,
-      message: "AI generation is not configured on this server (missing ANTHROPIC_API_KEY).",
+      message: "AI generation is not configured on this server (no LLM provider credential found).",
     };
   }
 
-  const context = await buildContext(lesson.module.courseId, lesson.id, lesson.title);
+  const context = await buildContext(lesson.module.courseId, lesson.id);
   if (!context.trim()) {
     return { aiConfigured: true, message: "No ingested material found for this lesson yet." };
   }

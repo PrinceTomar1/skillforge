@@ -107,7 +107,8 @@ export default function AITutorPage() {
             <p className="font-medium">AI generation isn't configured on this server.</p>
             <p className="mt-0.5 text-amber-700">
               Retrieval over your course material still works (you'll see real cited sources below), but generating a natural-language
-              answer requires an <code className="rounded bg-amber-100 px-1">ANTHROPIC_API_KEY</code> in the backend environment.
+              answer requires an LLM provider key (<code className="rounded bg-amber-100 px-1">ANTHROPIC_API_KEY</code> or{" "}
+              <code className="rounded bg-amber-100 px-1">GEMINI_API_KEY</code>) in the backend environment.
             </p>
           </div>
         </div>

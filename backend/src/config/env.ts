@@ -19,9 +19,11 @@ export const env = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   cookieName: process.env.COOKIE_NAME ?? "skillforge_token",
 
-  aiProvider: (process.env.AI_PROVIDER ?? "none") as "anthropic" | "none",
+  aiProvider: (process.env.AI_PROVIDER ?? "none") as "anthropic" | "gemini" | "none",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-20250929",
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  geminiModel: process.env.GEMINI_MODEL ?? "gemini-3.6-flash",
 
   embeddingProvider: (process.env.EMBEDDING_PROVIDER ?? "local") as "openai" | "local",
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
@@ -33,5 +35,7 @@ export const env = {
   isProduction: process.env.NODE_ENV === "production",
 };
 
-export const aiIsConfigured = env.aiProvider === "anthropic" && env.anthropicApiKey.length > 0;
+export const aiIsConfigured =
+  (env.aiProvider === "anthropic" && env.anthropicApiKey.length > 0) ||
+  (env.aiProvider === "gemini" && env.geminiApiKey.length > 0);
 export const embeddingsUseRealProvider = env.embeddingProvider === "openai" && env.openaiApiKey.length > 0;

@@ -139,8 +139,18 @@ supported by it. Respond with ONLY valid JSON matching the requested shape — n
 markdown fences.`;
   const userPrompt = `COURSE MATERIAL:\n${context}\n\nTASK: ${instruction}`;
 
-  const raw = await llm.generate({ system, messages: [{ role: "user", content: userPrompt }], maxTokens: 1600 });
-  const parsed = schema.parse(extractJson(raw));
+  let parsed: unknown;
+  try {
+    const raw = await llm.generate({ system, messages: [{ role: "user", content: userPrompt }], maxTokens: 1600 });
+    parsed = schema.parse(extractJson(raw));
+  } catch (err) {
+    console.error("Study resource generation failed:", err);
+    return {
+      aiConfigured: true,
+      resource: null,
+      message: "The AI provider ran into a temporary error while generating this resource (it may be rate-limited or experiencing high demand). Please try again in a moment.",
+    };
+  }
 
   const saved = await prisma.studyResource.create({
     data: {
@@ -207,27 +217,36 @@ export async function generateQuizForLesson(params: {
   const system = `You are writing a quiz for the lesson "${lesson.title}". Base every question strictly
 on the provided material. Respond with ONLY valid JSON: {"questions": [{"prompt": string,
 "options": string[4], "correctOption": number, "explanation": string, "topic": string}]}`;
-  const raw = await llm.generate({
-    system,
-    messages: [{ role: "user", content: `LESSON MATERIAL:\n${context}\n\nGenerate ${count} multiple-choice questions.` }],
-    maxTokens: 1800,
-  });
+  let parsed: { questions: Array<{ prompt: string; options: string[]; correctOption: number; explanation: string; topic?: string }> };
+  try {
+    const raw = await llm.generate({
+      system,
+      messages: [{ role: "user", content: `LESSON MATERIAL:\n${context}\n\nGenerate ${count} multiple-choice questions.` }],
+      maxTokens: 1800,
+    });
 
-  const parsed = z
-    .object({
-      questions: z
-        .array(
-          z.object({
-            prompt: z.string(),
-            options: z.array(z.string()).length(4),
-            correctOption: z.number().min(0).max(3),
-            explanation: z.string(),
-            topic: z.string().optional(),
-          }),
-        )
-        .min(1),
-    })
-    .parse(extractJson(raw));
+    parsed = z
+      .object({
+        questions: z
+          .array(
+            z.object({
+              prompt: z.string(),
+              options: z.array(z.string()).length(4),
+              correctOption: z.number().min(0).max(3),
+              explanation: z.string(),
+              topic: z.string().optional(),
+            }),
+          )
+          .min(1),
+      })
+      .parse(extractJson(raw));
+  } catch (err) {
+    console.error("Quiz generation failed:", err);
+    return {
+      aiConfigured: true,
+      message: "The AI provider ran into a temporary error while generating this quiz (it may be rate-limited or experiencing high demand). Please try again in a moment.",
+    };
+  }
 
   const quiz = await prisma.quiz.create({
     data: {

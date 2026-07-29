@@ -85,7 +85,19 @@ export async function askTutor(params: {
   ];
 
   const llm = getLLMProvider();
-  const answer = await llm.generate({ system: systemPrompt, messages: chatMessages, maxTokens: 800 });
+  let answer: string;
+  try {
+    answer = await llm.generate({ system: systemPrompt, messages: chatMessages, maxTokens: 800 });
+  } catch (err) {
+    // A provider outage (rate limit, temporary overload, network blip)
+    // shouldn't surface as a raw 500 or leave the user's message dangling
+    // with no reply — the conversation still gets a real assistant turn,
+    // just one that honestly explains generation failed and invites a retry.
+    console.error("LLM generation failed:", err);
+    answer =
+      "The AI provider ran into a temporary error while generating a response (it may be rate-limited or " +
+      "experiencing high demand). Your question and the retrieved sources below are saved — please try asking again in a moment.";
+  }
 
   const sources = chunks.map((c) => ({
     lessonId: c.lessonId,

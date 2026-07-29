@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, BookOpen, MessageSquarePlus, Send, Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
 import { AppLayout } from "../../components/layout/AppLayout";
+import { Markdown } from "../../components/Markdown";
 import { api, getErrorMessage } from "../../lib/api";
 import { Button, Card, Select, Spinner } from "../../components/ui";
 import type { TutorConversation, TutorMessage } from "../../types";
@@ -153,7 +154,7 @@ export default function AITutorPage() {
               {messages.map((m) => (
                 <div key={m.id} className={`flex ${m.role === "USER" ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${m.role === "USER" ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-800"}`}>
-                    <p className="whitespace-pre-wrap">{m.content}</p>
+                    <Markdown text={m.content} />
                     {m.sources && m.sources.length > 0 && (
                       <div className="mt-3 space-y-1.5 border-t border-slate-200/70 pt-2.5">
                         <p className="flex items-center gap-1 text-xs font-semibold text-slate-500">

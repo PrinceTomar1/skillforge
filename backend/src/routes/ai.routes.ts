@@ -33,6 +33,38 @@ router.post(
   }),
 );
 
+/**
+ * Server-Sent Events variant: streams the answer as it's generated instead
+ * of waiting for the full response. A real LLM call can legitimately take
+ * many seconds, and a single blocking wait with nothing visible reads as
+ * "broken" even when it's working — streaming the first token back quickly
+ * is what makes it feel like a live conversation.
+ */
+router.post("/tutor/ask/stream", requireRole("STUDENT"), validate({ body: askSchema }), async (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // disable nginx proxy buffering if deployed behind one
+  res.flushHeaders();
+
+  const send = (event: Record<string, unknown>) => {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  const heartbeat = setInterval(() => res.write(": ping\n\n"), 15000);
+
+  try {
+    const result = await tutorService.askTutorStream({ userId: req.user!.userId, ...req.body }, (text) => send({ type: "chunk", text }));
+    send({ type: "done", conversationId: result.conversationId, sources: result.sources, aiConfigured: result.aiConfigured });
+  } catch (err) {
+    console.error("Streaming AI Tutor request failed:", err);
+    send({ type: "error", message: "Something went wrong generating a response. Please try again." });
+  } finally {
+    clearInterval(heartbeat);
+    res.end();
+  }
+});
+
 router.get(
   "/tutor/conversations",
   asyncHandler(async (req, res) => {

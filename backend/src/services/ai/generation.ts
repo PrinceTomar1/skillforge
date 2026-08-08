@@ -1,8 +1,18 @@
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/errors";
-import { getLLMProvider } from "./llmProvider";
+import { getLLMProvider, isRateLimitError } from "./llmProvider";
 import { logActivity } from "../activityService";
+
+const GENERIC_PROVIDER_ERROR_MESSAGE = "The AI provider ran into a temporary error while generating this. Please try again in a moment.";
+const RATE_LIMIT_ERROR_MESSAGE =
+  "The AI provider's request quota is used up right now — this is an account-level rate/quota limit " +
+  "(common on free-tier API keys), not a bug in the app. It typically resolves once the quota resets, " +
+  "or immediately if billing is enabled on the provider account. Please try again shortly.";
+
+function describeProviderFailure(err: unknown): string {
+  return isRateLimitError(err) ? RATE_LIMIT_ERROR_MESSAGE : GENERIC_PROVIDER_ERROR_MESSAGE;
+}
 
 const MAX_CONTEXT_CHUNKS = 24;
 
@@ -152,7 +162,7 @@ JSON matching the requested shape — no prose outside the JSON, no markdown fen
     return {
       aiConfigured: true,
       resource: null,
-      message: "The AI provider ran into a temporary error while generating this resource (it may be rate-limited or experiencing high demand). Please try again in a moment.",
+      message: describeProviderFailure(err),
     };
   }
 
@@ -251,7 +261,7 @@ question. Respond with ONLY valid JSON: {"questions": [{"prompt": string, "optio
     console.error("Quiz generation failed:", err);
     return {
       aiConfigured: true,
-      message: "The AI provider ran into a temporary error while generating this quiz (it may be rate-limited or experiencing high demand). Please try again in a moment.",
+      message: describeProviderFailure(err),
     };
   }
 

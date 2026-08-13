@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { GraduationCap } from "lucide-react";
 import toast from "react-hot-toast";
@@ -16,9 +16,11 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (user) {
-    navigate(user.role === "INSTRUCTOR" ? "/instructor" : "/dashboard", { replace: true });
-  }
+  useEffect(() => {
+    if (user) {
+      navigate(user.role === "INSTRUCTOR" ? "/instructor" : "/dashboard", { replace: true });
+    }
+  }, [user, navigate]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();

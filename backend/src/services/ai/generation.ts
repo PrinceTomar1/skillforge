@@ -265,23 +265,28 @@ question. Respond with ONLY valid JSON: {"questions": [{"prompt": string, "optio
     };
   }
 
-  const quiz = await prisma.quiz.create({
-    data: {
-      lessonId: lesson.id,
-      title: `${lesson.title} — Quiz`,
-      description: "AI-generated quiz grounded in this lesson's material. Review before publishing.",
-      isAiGenerated: true,
-      questions: {
-        create: parsed.questions.map((q, i) => ({
-          prompt: q.prompt,
-          options: q.options,
-          correctOption: q.correctOption,
-          explanation: q.explanation,
-          topic: q.topic,
-          order: i,
-        })),
+  // Regenerating replaces the old AI draft instead of stacking up duplicates.
+  // Hand-written quizzes (isAiGenerated false) are left alone.
+  const quiz = await prisma.$transaction(async (tx) => {
+    await tx.quiz.deleteMany({ where: { lessonId: lesson.id, isAiGenerated: true } });
+    return tx.quiz.create({
+      data: {
+        lessonId: lesson.id,
+        title: `${lesson.title} — Quiz`,
+        description: "AI-generated quiz grounded in this lesson's material. Review before publishing.",
+        isAiGenerated: true,
+        questions: {
+          create: parsed.questions.map((q, i) => ({
+            prompt: q.prompt,
+            options: q.options,
+            correctOption: q.correctOption,
+            explanation: q.explanation,
+            topic: q.topic,
+            order: i,
+          })),
+        },
       },
-    },
+    });
   });
 
   return { aiConfigured: true, quizId: quiz.id };

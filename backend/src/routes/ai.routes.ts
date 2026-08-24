@@ -33,13 +33,8 @@ router.post(
   }),
 );
 
-/**
- * Server-Sent Events variant: streams the answer as it's generated instead
- * of waiting for the full response. A real LLM call can legitimately take
- * many seconds, and a single blocking wait with nothing visible reads as
- * "broken" even when it's working — streaming the first token back quickly
- * is what makes it feel like a live conversation.
- */
+// SSE variant of /tutor/ask — streams the answer as it generates so the
+// student isn't staring at a spinner for several seconds.
 router.post("/tutor/ask/stream", requireRole("STUDENT"), validate({ body: askSchema }), async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");

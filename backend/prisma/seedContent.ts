@@ -3,19 +3,7 @@
 // technical explanations (not lorem ipsum) so semantic/lexical retrieval and
 // AI-generated study resources have real substance to work with.
 
-// Freely-licensed sample clips used as stand-in lesson videos (CC0, hosted by
-// MDN — not the actual course footage, just something real that reliably
-// loads in a <video> tag so the player UI is genuinely exercised). Verified
-// directly: fast, stable downloads with proper CORS + range support. Several
-// other "well-known" sample video CDNs (the old Google gtv-videos-bucket,
-// samplelib.com) were tried first and turned out to return 403s or hang
-// under load, so don't reach for those without re-verifying.
-export const SAMPLE_VIDEOS = [
-  "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-  "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4",
-  "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-  "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4",
-];
+// Each lesson points at a real explainer video on YouTube for that topic.
 
 export interface LessonSeed {
   title: string;
@@ -60,7 +48,7 @@ export const COURSES: CourseSeed[] = [
           {
             title: "Components, Props, and JSX",
             durationSeconds: 720,
-            videoUrl: SAMPLE_VIDEOS[0],
+            videoUrl: "https://www.youtube.com/watch?v=Tn6-PIqc4UM",
             content: `React applications are built from components: independent, reusable pieces of UI that each manage their own markup and logic. A component is just a JavaScript function that returns JSX, a syntax extension that looks like HTML but compiles down to calls to React.createElement.
 
 Props (short for "properties") are how data flows into a component from its parent. Props are read-only from the receiving component's perspective — a component must never mutate its own props. This one-directional data flow (parent to child) is what makes React applications predictable: given the same props, a component renders the same output every time, which is the foundation of React's "pure function" mental model for UI.
@@ -104,7 +92,7 @@ Keys matter when rendering lists: React uses the "key" prop to match array items
           {
             title: "State Management with Hooks",
             durationSeconds: 840,
-            videoUrl: SAMPLE_VIDEOS[1],
+            videoUrl: "https://www.youtube.com/watch?v=TNhaISOUy6Q",
             content: `Hooks let function components hold state and side effects without being converted into classes. useState(initialValue) returns a [value, setValue] pair; calling setValue schedules a re-render with the new value. State updates in React are asynchronous and batched — multiple setState calls inside the same event handler are grouped into a single re-render for performance, so code should never rely on state having updated immediately after calling the setter.
 
 When a state update depends on the previous state, the functional updater form should be used: setCount(prev => prev + 1) instead of setCount(count + 1). This avoids stale-closure bugs where a handler captured an old value of count from a previous render.
@@ -166,7 +154,7 @@ useContext lets a component read a value from a Context Provider higher in the t
           {
             title: "RESTful API Design",
             durationSeconds: 660,
-            videoUrl: SAMPLE_VIDEOS[2],
+            videoUrl: "https://www.youtube.com/watch?v=7YcW25PHnAA",
             content: `A RESTful API models an application's data as resources, addressed by URLs, manipulated through a small, consistent set of HTTP verbs. GET retrieves a resource and must never have side effects. POST creates a new resource under a collection (POST /courses). PATCH partially updates an existing resource; PUT conventionally replaces it wholesale. DELETE removes a resource. Using the verb to express the action — rather than encoding it in the URL, like /getCourses or /deleteCourse — is what makes an API "RESTful" rather than just an HTTP-based RPC interface.
 
 Resource URLs should be nouns, not verbs, and collection endpoints should be plural: /courses for the collection, /courses/:id for a single item, and nested resources like /courses/:id/modules for a module that only makes sense in the context of its parent course.
@@ -205,7 +193,7 @@ Pagination, filtering, and sorting are typically expressed as query parameters (
           {
             title: "Authentication & Authorization",
             durationSeconds: 900,
-            videoUrl: SAMPLE_VIDEOS[3],
+            videoUrl: "https://www.youtube.com/watch?v=UBUNrFtufWo",
             content: `Authentication answers "who is making this request?"; authorization answers "is this specific user allowed to do this specific thing?" A system can authenticate a user correctly and still need to reject the request if authorization fails — for example, a logged-in student trying to delete a course they don't own.
 
 Passwords must never be stored in plain text. Instead, a slow, salted hashing algorithm designed for passwords — bcrypt, scrypt, or argon2 — is used. Bcrypt automatically generates and embeds a random salt per password and includes a configurable "cost factor" that controls how many rounds of hashing are performed, so the hashing can be made deliberately slow enough to resist brute-force and rainbow-table attacks even as hardware gets faster.
@@ -277,7 +265,7 @@ CORS (Cross-Origin Resource Sharing) is a browser security mechanism, not a serv
           {
             title: "Supervised vs Unsupervised Learning",
             durationSeconds: 780,
-            videoUrl: SAMPLE_VIDEOS[0],
+            videoUrl: "https://www.youtube.com/watch?v=Gv9_4yMHFhI",
             content: `Machine learning problems are usually split into supervised and unsupervised learning based on whether the training data includes labels. In supervised learning, each training example comes with a known correct output — for example, an email labeled "spam" or "not spam," or a house's square footage paired with its actual sale price. The model's job is to learn a function that maps inputs to outputs well enough to generalize to new, unseen examples.
 
 Supervised learning splits further into classification (predicting a discrete category, like spam/not-spam) and regression (predicting a continuous number, like a price). The choice of loss function used to train the model depends on this distinction: classification commonly uses cross-entropy loss, while regression commonly uses mean squared error.
@@ -321,7 +309,7 @@ Regardless of the paradigm, every ML workflow depends on splitting data into tra
           {
             title: "Linear Regression and Model Evaluation",
             durationSeconds: 900,
-            videoUrl: SAMPLE_VIDEOS[1],
+            videoUrl: "https://www.youtube.com/watch?v=7ArmBVF2dCs",
             content: `Linear regression models the relationship between input features and a continuous target as a weighted sum: y = w1*x1 + w2*x2 + ... + b. Training means finding the weights (w) and bias (b) that minimize a loss function — almost always mean squared error (MSE) — over the training data. This is typically solved either in closed form (the normal equation) for small datasets, or iteratively via gradient descent for larger ones.
 
 Gradient descent updates each weight in the direction that reduces the loss, scaled by a learning rate. Too small a learning rate makes training slow; too large a learning rate can cause the loss to diverge instead of converge. This is one of the most important hyperparameters to tune in almost any ML model, not just linear regression.
@@ -371,7 +359,7 @@ Overfitting occurs when a model fits the training data's noise rather than its u
           {
             title: "Introduction to Neural Networks",
             durationSeconds: 840,
-            videoUrl: SAMPLE_VIDEOS[2],
+            videoUrl: "https://www.youtube.com/watch?v=aircAruvnKk",
             content: `A neural network is built from layers of simple units (neurons), each computing a weighted sum of its inputs followed by a nonlinear activation function. Without a nonlinearity like ReLU, sigmoid, or tanh between layers, stacking multiple linear layers would collapse mathematically into a single linear layer, no matter how many layers were stacked — the nonlinearity is what gives deep networks the ability to approximate complex, non-linear functions.
 
 A basic feedforward network (multilayer perceptron) has an input layer, one or more hidden layers, and an output layer. The output layer's activation depends on the task: a single sigmoid unit for binary classification, softmax across units for multi-class classification, and a linear (no activation) output for regression.
@@ -415,7 +403,7 @@ Batch size and epochs control training dynamics: one epoch is one full pass over
           {
             title: "Training, Overfitting, and Regularization",
             durationSeconds: 900,
-            videoUrl: SAMPLE_VIDEOS[3],
+            videoUrl: "https://www.youtube.com/watch?v=EuBBz3bI-aA",
             content: `A model that performs much better on training data than on validation data is overfitting: it has memorized noise or idiosyncrasies specific to the training set rather than learning patterns that generalize. A model that performs poorly on both training and validation data is underfitting, usually meaning it doesn't have enough capacity or hasn't trained long enough to capture the underlying pattern. Plotting training and validation loss over epochs — the "learning curve" — is the standard way to diagnose which situation a model is in.
 
 Dropout is a regularization technique specific to neural networks: during training, a random subset of neurons is temporarily "dropped" (set to zero) on each forward pass, forcing the network to not rely too heavily on any single neuron or narrow co-adapted group of neurons. At inference time, dropout is turned off and outputs are scaled to account for the difference.
@@ -482,7 +470,7 @@ Cross-validation, especially k-fold cross-validation, is used when the dataset i
           {
             title: "Transformers and Attention",
             durationSeconds: 900,
-            videoUrl: SAMPLE_VIDEOS[0],
+            videoUrl: "https://www.youtube.com/watch?v=eMlx5fFNoYc",
             content: `The transformer architecture, introduced in the 2017 paper "Attention Is All You Need," replaced the recurrent (step-by-step) processing used by older sequence models with a mechanism called self-attention that lets every token in a sequence directly attend to every other token in parallel. This parallelism is a major reason transformers scale so well on modern GPU/TPU hardware compared to RNNs, which had to process tokens one at a time.
 
 Self-attention works by projecting each token's embedding into three vectors: a Query, a Key, and a Value. For each token, its Query vector is compared against every other token's Key vector (via a dot product) to produce attention scores, which are turned into weights via softmax. The token's new representation is a weighted sum of all tokens' Value vectors, using those weights — in effect, each token asks "which other tokens are relevant to understanding me?" and pulls in information from them accordingly.
@@ -526,7 +514,7 @@ A large language model is trained via next-token prediction: given a sequence of
           {
             title: "Prompting and In-Context Learning",
             durationSeconds: 780,
-            videoUrl: SAMPLE_VIDEOS[1],
+            videoUrl: "https://www.youtube.com/watch?v=_ZvnD73m40o",
             content: `In-context learning is the ability of a large language model to adapt its behavior based purely on examples or instructions given in the prompt, without any weight updates. This is fundamentally different from traditional machine learning, where adapting a model to a new task requires retraining or fine-tuning on labeled examples.
 
 Zero-shot prompting asks the model to perform a task with only an instruction and no examples ("Classify this review as positive or negative: ..."). Few-shot prompting includes a handful of example input/output pairs directly in the prompt before the real query, which often substantially improves accuracy and output format consistency on tasks the model hasn't seen instructions for before.
@@ -576,7 +564,7 @@ Prompt engineering is inherently empirical: small wording changes, the order of 
           {
             title: "Embeddings and Vector Search",
             durationSeconds: 840,
-            videoUrl: SAMPLE_VIDEOS[2],
+            videoUrl: "https://www.youtube.com/watch?v=ySus5ZS0b94",
             content: `An embedding is a dense numerical vector representation of a piece of text (or an image, or other data) such that semantically similar inputs are mapped to nearby points in the vector space. Embedding models are trained so that, for example, the vectors for "how do I reset my password" and "steps to change my login credentials" end up close together even though they share almost no exact words, which is exactly what makes embeddings useful for semantic search — search based on meaning rather than exact keyword matching.
 
 Similarity between two embedding vectors is typically measured with cosine similarity (the cosine of the angle between them, ranging from -1 to 1, where 1 means identical direction) or, equivalently for normalized vectors, by Euclidean or dot-product distance. Most vector databases let you choose which distance metric to index with, and it must match the metric the embedding model was trained/optimized for.
@@ -632,7 +620,7 @@ Not all embeddings come from paid APIs — deterministic techniques like feature
           {
             title: "Building a RAG Pipeline",
             durationSeconds: 960,
-            videoUrl: SAMPLE_VIDEOS[3],
+            videoUrl: "https://www.youtube.com/watch?v=T-D1OfcDW1M",
             content: `Retrieval-Augmented Generation (RAG) combines a retrieval system with a generative LLM so the model's answers are grounded in specific, up-to-date, or private documents rather than relying solely on whatever it memorized during training. The core pipeline has five stages: ingest documents, chunk and clean the text, embed each chunk and store it in a vector index, retrieve the most relevant chunks for an incoming query, and finally construct a prompt that includes those chunks as context before calling the LLM to generate an answer.
 
 RAG solves two problems that a raw LLM has on its own. First, hallucination: without grounding, a model can state confident-sounding but false facts, especially about narrow or private information it never saw during training (like a specific company's internal documents, or a specific course's lesson content). Second, staleness: a model's training data has a cutoff date, so it cannot know about information created afterward, while a RAG system's knowledge is only as current as its document index, which can be updated at any time without retraining the model.
@@ -704,7 +692,7 @@ A well-built RAG system keeps ingestion, embedding, retrieval, and generation as
           {
             title: "Compute, Storage, and Networking on AWS",
             durationSeconds: 900,
-            videoUrl: SAMPLE_VIDEOS[0],
+            videoUrl: "https://www.youtube.com/watch?v=JIbIYCM48to",
             content: `Cloud compute options exist on a spectrum of control versus operational effort. EC2 (Elastic Compute Cloud) gives full control over virtual machines — you choose the OS, install anything, and are responsible for patching and scaling. AWS Lambda, at the other end, is "serverless": you upload a function, and AWS handles provisioning, scaling to zero when idle, and scaling out automatically under load, but you're constrained to short-lived, stateless execution. Container services like ECS or EKS sit in between, giving control over the application's runtime environment without managing the underlying VMs directly.
 
 S3 (Simple Storage Service) is AWS's object storage: durable, virtually unlimited storage for files (objects), addressed by a bucket name and key, not organized as a traditional filesystem. It's designed for eleven-nines durability, meaning the probability of losing an object in a given year is vanishingly small, achieved by automatically replicating data across multiple physically separate facilities. S3 is commonly used for static assets, backups, and as a data lake, not for data that needs to be queried with SQL or updated in place at the byte level.
@@ -748,7 +736,7 @@ IAM (Identity and Access Management) controls who — and what services — can 
           {
             title: "Infrastructure as Code with Terraform",
             durationSeconds: 840,
-            videoUrl: SAMPLE_VIDEOS[1],
+            videoUrl: "https://www.youtube.com/watch?v=SLB_c_ayRMo",
             content: `Infrastructure as Code (IaC) means defining infrastructure — servers, networks, databases, permissions — in version-controlled configuration files instead of clicking through a cloud console. Terraform is a widely used, cloud-agnostic IaC tool: the same workflow (write config, plan, apply) works across AWS, GCP, Azure, and dozens of other providers, using provider-specific "resource" blocks.
 
 Terraform's core workflow is declarative, not imperative: you describe the desired end state of your infrastructure, and Terraform computes the difference between that desired state and its recorded current state (the "state file"), then figures out what to create, update, or destroy to reconcile them. This is fundamentally different from a shell script that imperatively lists steps to run, because Terraform can safely be re-run at any time — running "terraform apply" again when nothing has changed does nothing, since there's no diff to apply.
@@ -798,7 +786,7 @@ Modules let Terraform configuration be organized into reusable components — a 
           {
             title: "Docker and Container Orchestration",
             durationSeconds: 900,
-            videoUrl: SAMPLE_VIDEOS[2],
+            videoUrl: "https://www.youtube.com/watch?v=pg19Z8LL06w",
             content: `A container packages an application together with its dependencies — libraries, runtime, system tools — into a single image that runs identically regardless of the underlying host, solving the classic "it works on my machine" problem. Unlike a virtual machine, a container does not include a full guest operating system; it shares the host machine's kernel and isolates processes using kernel features like namespaces and cgroups, which is why containers start in milliseconds and use a fraction of the resources a VM would.
 
 A Dockerfile is a text file of instructions used to build an image: FROM sets the base image, COPY adds application code, RUN executes build-time commands (like installing dependencies), and CMD or ENTRYPOINT defines what runs when a container starts from the image. Each instruction creates a cached layer, and Docker reuses unchanged layers on subsequent builds, which is why ordering instructions from least-to-most frequently changing (e.g., installing dependencies before copying application code) significantly speeds up rebuilds.
@@ -854,7 +842,7 @@ Orchestration platforms like Kubernetes manage many containers across many machi
           {
             title: "Building CI/CD Pipelines",
             durationSeconds: 780,
-            videoUrl: SAMPLE_VIDEOS[3],
+            videoUrl: "https://www.youtube.com/watch?v=scEDHsr3APg",
             content: `Continuous Integration (CI) means every code change is automatically built and tested as soon as it's pushed, catching integration problems within minutes rather than discovering them days later when multiple people's changes collide. A typical CI pipeline runs on every pull request: install dependencies, run linters and type checks, run the test suite, and build the application, failing fast and blocking a merge if any step fails.
 
 Continuous Delivery extends this by ensuring the codebase is always in a deployable state after CI passes — every successful build produces a deployable artifact. Continuous Deployment goes one step further and automatically deploys every change that passes the pipeline to production without manual approval, which requires very high confidence in the automated test suite, since there's no human check before users see the change.

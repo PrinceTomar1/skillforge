@@ -15,6 +15,13 @@ interface LessonProgressRow {
   lastPositionSeconds: number;
 }
 
+// Pull the video id out of a youtube watch/share/embed url. Returns null for
+// anything that isn't youtube so we fall back to a plain <video> tag.
+function youtubeId(url: string): string | null {
+  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+
 export default function CoursePlayerPage() {
   const { slug, lessonId } = useParams<{ slug: string; lessonId?: string }>();
   const navigate = useNavigate();
@@ -154,13 +161,24 @@ export default function CoursePlayerPage() {
           ) : (
             <div className="mx-auto max-w-3xl px-6 py-8">
               {lesson.videoUrl && (
-                <video
-                  key={lesson.id}
-                  src={lesson.videoUrl}
-                  controls
-                  className="mb-6 aspect-video w-full rounded-xl bg-black"
-                  onEnded={() => !isCompleted && completeMutation.mutate(true)}
-                />
+                youtubeId(lesson.videoUrl) ? (
+                  <iframe
+                    key={lesson.id}
+                    src={`https://www.youtube-nocookie.com/embed/${youtubeId(lesson.videoUrl)}`}
+                    title={lesson.title}
+                    className="mb-6 aspect-video w-full rounded-xl bg-black"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video
+                    key={lesson.id}
+                    src={lesson.videoUrl}
+                    controls
+                    className="mb-6 aspect-video w-full rounded-xl bg-black"
+                    onEnded={() => !isCompleted && completeMutation.mutate(true)}
+                  />
+                )
               )}
 
               <div className="flex flex-wrap items-center justify-between gap-3">

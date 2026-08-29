@@ -463,7 +463,7 @@ function LessonFormModal({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label htmlFor="lvideo">Video URL (optional)</Label>
-            <Input id="lvideo" type="url" defaultValue={initial?.videoUrl ?? ""} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://..." />
+            <Input id="lvideo" type="url" defaultValue={initial?.videoUrl ?? ""} onChange={(e) => setVideoUrl(e.target.value)} placeholder="YouTube link or .mp4 URL" />
           </div>
           <div>
             <Label htmlFor="lduration">Duration (minutes)</Label>

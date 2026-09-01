@@ -59,18 +59,19 @@ scores, no fake AI responses, and no "coming soon" screens.
                                                     │
                               ┌─────────────────────┼─────────────────────┐
                               │                      │                     │
-                        ┌─────▼─────┐         ┌──────▼──────┐      ┌───────▼───────┐
-                        │ PostgreSQL │         │ Embedding    │      │  LLM Provider  │
-                        │ + pgvector │         │ Provider     │      │  (Anthropic)   │
-                        │ (Prisma)   │         │ (OpenAI or   │      │  or "none"     │
-                        └───────────┘         │  local hash) │      │  honest fallback│
-                                               └─────────────┘      └───────────────┘
+                        ┌─────▼─────┐         ┌──────▼──────┐      ┌───────▼────────┐
+                        │ PostgreSQL │         │ Embedding    │      │  LLM Provider   │
+                        │ + pgvector │         │ Provider     │      │ (Anthropic or   │
+                        │ (Prisma)   │         │ (OpenAI or   │      │  Gemini) or     │
+                        └───────────┘         │  local hash) │      │  "none" (honest │
+                                               └─────────────┘      │  fallback)      │
+                                                                     └────────────────┘
 ```
 
 - **Frontend and backend are separate apps** communicating over a typed JSON REST API — no server-rendered coupling, easy to deploy independently.
 - **Auth is stateless** (signed JWT in an httpOnly cookie), so the API scales horizontally without a session store.
 - **The vector store is just Postgres** (via the `pgvector` extension) — one database, one connection pool, no extra infrastructure to run locally or operate in production.
-- **AI providers are behind interfaces** (`LLMProvider`, `EmbeddingProvider`), so swapping Anthropic for another LLM, or OpenAI embeddings for a different embedding model, is a one-file change — see [`src/services/ai`](backend/src/services/ai).
+- **AI providers are behind interfaces** (`LLMProvider`, `EmbeddingProvider`) — the app ships with both Anthropic and Gemini implementations of `LLMProvider` (selected via `AI_PROVIDER`), and swapping in another LLM or a different embedding model is a one-file change — see [`src/services/ai`](backend/src/services/ai).
 
 ## Tech stack
 
@@ -84,7 +85,7 @@ scores, no fake AI responses, and no "coming soon" screens.
 | ORM | Prisma | Type-safe queries, real migrations, good Postgres extension support |
 | Database | PostgreSQL 16 + `pgvector` | One database for relational *and* vector data — no separate vector DB to run |
 | Auth | JWT in an httpOnly cookie + bcrypt | Stateless, XSS-resistant cookie storage, industry-standard password hashing |
-| LLM | Anthropic Claude (pluggable) | Strong instruction-following for grounded, citation-aware answers |
+| LLM | Anthropic Claude or Google Gemini (pluggable) | Both are strong at instruction-following for grounded, citation-aware answers; the app supports either via `AI_PROVIDER` |
 | Embeddings | OpenAI `text-embedding-3-small` (pluggable), with a local fallback | Real semantic embeddings when a key is present; a deterministic hashing fallback keeps the *entire* pipeline runnable with zero external credentials |
 | Testing | Vitest + Supertest (backend), Vitest + Testing Library (frontend) | Fast, native ESM/TS support |
 
@@ -109,11 +110,18 @@ external credentials. This is clearly labeled everywhere it's surfaced
 (`GET /api/ai/status`, the AI Tutor UI) — the app never pretends a fallback
 is the real thing.
 
-**LLM without an API key.** If `ANTHROPIC_API_KEY` isn't set, the AI Tutor
-and study-resource generation return a clear, honest message explaining
-what's missing and how to enable it — retrieval and its cited sources still
-work, only the natural-language generation step is unavailable. Nothing is
-faked.
+**LLM without an API key.** If neither `ANTHROPIC_API_KEY` nor `GEMINI_API_KEY`
+is set for the selected `AI_PROVIDER`, the AI Tutor and study-resource
+generation return a clear, honest message explaining what's missing and how
+to enable it — retrieval and its cited sources still work, only the
+natural-language generation step is unavailable. Nothing is faked.
+
+**Two LLM providers, verified.** `AI_PROVIDER=anthropic` and
+`AI_PROVIDER=gemini` are both implemented behind the same `LLMProvider`
+interface ([`llmProvider.ts`](backend/src/services/ai/llmProvider.ts)) and
+both have been exercised end to end against the real API in this project —
+grounded, cited AI Tutor answers, AI-generated flashcards, and AI-generated
+quiz questions all verified working through Gemini specifically.
 
 ## Authentication & authorization
 
@@ -243,15 +251,17 @@ Open **http://localhost:5173** and log in with one of the [demo accounts](#demo-
 | `JWT_EXPIRES_IN` | | Session lifetime (default `7d`) |
 | `PORT` | | API port (default `4000`) |
 | `CORS_ORIGIN` | | Allowed frontend origin (default `http://localhost:5173`) |
-| `AI_PROVIDER` | | `anthropic` or `none` (default `none`) |
-| `ANTHROPIC_API_KEY` | For real AI Tutor answers | Anthropic API key |
+| `AI_PROVIDER` | | `anthropic`, `gemini`, or `none` (default `none`) |
+| `ANTHROPIC_API_KEY` | If `AI_PROVIDER=anthropic` | Anthropic Console API key (starts `sk-ant-`) |
 | `ANTHROPIC_MODEL` | | Defaults to `claude-sonnet-5-20250929` |
+| `GEMINI_API_KEY` | If `AI_PROVIDER=gemini` | Google AI Studio / Gemini API key |
+| `GEMINI_MODEL` | | Defaults to `gemini-3.6-flash` |
 | `EMBEDDING_PROVIDER` | | `openai` or `local` (default `local`) |
 | `OPENAI_API_KEY` | For real semantic embeddings | OpenAI API key |
 | `EMBEDDING_DIMENSIONS` | | Must stay `1536` unless you also edit the Prisma `vector(1536)` column and re-migrate |
 | `MAX_UPLOAD_MB` | | Document upload size limit (default `10`) |
 
-**You must provide:** a `DATABASE_URL` and a `JWT_SECRET` to run the app at all. **Optionally provide** `ANTHROPIC_API_KEY` (for real AI Tutor / study-resource generation) and `OPENAI_API_KEY` (for real semantic embeddings instead of the local lexical fallback) — the app is fully functional, honestly, without either.
+**You must provide:** a `DATABASE_URL` and a `JWT_SECRET` to run the app at all. **Optionally provide** an LLM key (`ANTHROPIC_API_KEY` with `AI_PROVIDER=anthropic`, or `GEMINI_API_KEY` with `AI_PROVIDER=gemini`) for real AI Tutor / study-resource generation, and `OPENAI_API_KEY` for real semantic embeddings instead of the local lexical fallback — the app is fully functional, honestly, without any of them.
 
 ### Frontend (`frontend/.env`, see [`frontend/.env.example`](frontend/.env.example))
 
@@ -272,7 +282,9 @@ demo data, and starts both the API (`:4000`) and the frontend (`:5173`).
 Pass through AI keys via a `.env` file at the repo root (read by `docker compose`) or your shell environment:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-... OPENAI_API_KEY=sk-... docker compose up --build
+AI_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-... OPENAI_API_KEY=sk-... docker compose up --build
+# or, using Gemini instead:
+AI_PROVIDER=gemini GEMINI_API_KEY=... docker compose up --build
 ```
 
 ## Testing

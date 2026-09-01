@@ -6,6 +6,7 @@ import { AppLayout } from "../../components/layout/AppLayout";
 import { api, getErrorMessage } from "../../lib/api";
 import { Button, Card, EmptyState, Select } from "../../components/ui";
 import { Modal } from "../../components/Modal";
+import { Markdown } from "../../components/Markdown";
 import type { StudyResource, StudyResourceType } from "../../types";
 
 const RESOURCE_TYPES: Array<{ value: StudyResourceType; label: string; icon: typeof Sparkles; description: string }> = [
@@ -23,7 +24,9 @@ function ResourceContent({ resource }: { resource: StudyResource }) {
     case "SUMMARY":
       return (
         <div className="space-y-4">
-          <p className="text-sm leading-relaxed text-slate-700">{content.summary as string}</p>
+          <div className="text-sm leading-relaxed text-slate-700">
+            <Markdown text={content.summary as string} />
+          </div>
           <div>
             <p className="text-sm font-semibold text-slate-900">Key takeaways</p>
             <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-slate-600">

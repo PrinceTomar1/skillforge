@@ -59,6 +59,14 @@ class GeminiProvider implements LLMProvider {
       })),
       config: {
         systemInstruction: system,
+        // The SDK retries 5xx/429 responses up to 5 times by default with
+        // exponential backoff, which can turn a single overloaded-model
+        // error into a ~45s hang before the caller ever finds out. One
+        // quick retry still absorbs a genuinely transient blip; anything
+        // past that should surface promptly so the honest fallback message
+        // (see tutorService/generation catch blocks) shows up fast instead
+        // of the user staring at a spinner for the better part of a minute.
+        httpOptions: { retryOptions: { attempts: 2, initialDelay: 0.5, maxDelay: 2 } },
         // Gemini's "thinking" models spend part of the output token budget
         // on internal reasoning before the visible answer, which can
         // silently truncate short responses if the budget is too tight.

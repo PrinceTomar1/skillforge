@@ -6,9 +6,20 @@ Retrieval-Augmented Generation (RAG) pipeline** — course material is
 chunked, embedded, stored in a vector index, and retrieved per-question
 before an LLM ever sees it.
 
-This is not a prototype. Every button performs a real action against a real
-Postgres database through a typed REST API. There are no hardcoded quiz
-scores, no fake AI responses, and no "coming soon" screens.
+I built this as a solo project to actually implement the parts most
+"AI-powered" student demos skip: a vector index scoped correctly per course,
+retrieval that's honest enough to say "I don't know" instead of
+hallucinating, streamed LLM responses instead of one blocking request, auth
+that hashes passwords properly, and a quiz engine that grades real answers
+instead of a hardcoded score. This is not a prototype — every button
+performs a real action against a real Postgres database through a typed
+REST API. No hardcoded quiz scores, no fake AI responses, no "coming soon"
+screens.
+
+If you're reviewing this as a portfolio piece: the [RAG pipeline](#rag-pipeline)
+and [Known limitations](#known-limitations) sections are the ones I'd point
+you to first — they're where the actual engineering decisions (and honest
+trade-offs) are.
 
 ---
 

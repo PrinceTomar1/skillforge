@@ -11,6 +11,15 @@ body {
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Headings get a distinct display face instead of just a heavier weight of
+   the body font — a small thing, but it's the difference between a page
+   that was "designed" versus one where every size is the same font at a
+   different weight. */
+h1, h2, h3 {
+  font-family: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;

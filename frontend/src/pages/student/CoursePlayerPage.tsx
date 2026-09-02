@@ -66,7 +66,7 @@ export default function CoursePlayerPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  if (courseLoading || !course) return <AppLayout wide><PageSpinner /></AppLayout>;
+  if (courseLoading || !course) return <AppLayout wide hideFooter><PageSpinner /></AppLayout>;
 
   const currentIndex = allLessons.findIndex((l) => l.id === activeLessonId);
   const prevLesson = currentIndex > 0 ? allLessons[currentIndex - 1] : null;
@@ -125,7 +125,7 @@ export default function CoursePlayerPage() {
   );
 
   return (
-    <AppLayout wide>
+    <AppLayout wide hideFooter>
       <div className="flex h-[calc(100vh-8rem)] gap-6">
         <aside className="hidden w-80 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white lg:block">{Sidebar}</aside>
 

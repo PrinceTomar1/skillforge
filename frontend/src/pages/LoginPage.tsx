@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { GraduationCap } from "lucide-react";
 import toast from "react-hot-toast";
@@ -14,9 +14,15 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (user) {
-    navigate(user.role === "INSTRUCTOR" ? "/instructor" : "/dashboard", { replace: true });
-  }
+  // Redirecting must happen as an effect, not during render — calling
+  // navigate() while this component is still rendering triggers a router
+  // state update mid-render, which React (correctly) warns about and can
+  // leave the redirect half-applied depending on timing.
+  useEffect(() => {
+    if (user) {
+      navigate(user.role === "INSTRUCTOR" ? "/instructor" : "/dashboard", { replace: true });
+    }
+  }, [user, navigate]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();

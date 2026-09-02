@@ -12,9 +12,14 @@ RUN npm install
 COPY . .
 RUN npx prisma generate
 RUN npm run build
+RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 4000
 
-# docker-compose overrides this with migrate+seed+start; this default is
-# for running the image standalone against an already-migrated database.
-CMD ["node", "dist/server.js"]
+# Runs pending migrations then starts the server. Baked into the image
+# (rather than passed as a platform-specific "start command" string) so it
+# behaves identically everywhere the image runs — locally, docker-compose,
+# or a host like Render/Fly that execs the image directly. docker-compose
+# still overrides this with its own migrate+seed+start command for the
+# from-scratch demo-data flow; this is what runs everywhere else.
+ENTRYPOINT ["./docker-entrypoint.sh"]

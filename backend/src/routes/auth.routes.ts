@@ -8,10 +8,16 @@ import * as authService from "../services/authService";
 
 const router = Router();
 
+// The frontend and backend are served from different origins in production
+// (e.g. a Vercel domain calling a Render domain) — a genuinely cross-site
+// setup, not just cross-port like local dev's Vite proxy. Cross-site fetch
+// requests only carry a cookie when it's SameSite=None, and None requires
+// Secure (HTTPS), which we have via both hosts' TLS termination. Locally,
+// "lax" keeps working fine over plain http through the Vite proxy.
 const cookieOptions = {
   httpOnly: true,
   secure: env.isProduction,
-  sameSite: "lax" as const,
+  sameSite: (env.isProduction ? "none" : "lax") as "none" | "lax",
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
@@ -48,7 +54,7 @@ router.post(
 );
 
 router.post("/logout", (_req, res) => {
-  res.clearCookie(env.cookieName);
+  res.clearCookie(env.cookieName, { httpOnly: cookieOptions.httpOnly, secure: cookieOptions.secure, sameSite: cookieOptions.sameSite });
   res.status(204).send();
 });
 

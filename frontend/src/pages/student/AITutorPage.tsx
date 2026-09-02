@@ -5,8 +5,13 @@ import toast from "react-hot-toast";
 import { AppLayout } from "../../components/layout/AppLayout";
 import { Markdown } from "../../components/Markdown";
 import { api, getErrorMessage } from "../../lib/api";
-import { Button, Card, Select, Spinner } from "../../components/ui";
+import { Button, Card, Select } from "../../components/ui";
 import type { TutorConversation, TutorMessage } from "../../types";
+
+type StreamEvent =
+  | { type: "chunk"; text: string }
+  | { type: "done"; conversationId: string; sources: TutorMessage["sources"]; aiConfigured: boolean }
+  | { type: "error"; message: string };
 
 export default function AITutorPage() {
   const queryClient = useQueryClient();
@@ -14,7 +19,9 @@ export default function AITutorPage() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<TutorMessage[]>([]);
   const [input, setInput] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const streamingMessageId = useRef<string | null>(null);
 
   const { data: enrollments } = useQuery({
     queryKey: ["enrollments", "mine"],
@@ -44,36 +51,73 @@ export default function AITutorPage() {
     },
   });
 
-  const askMutation = useMutation({
-    mutationFn: async (message: string) =>
-      (
-        await api.post<{ conversationId: string; answer: string; sources: TutorMessage["sources"]; aiConfigured: boolean }>("/ai/tutor/ask", {
-          courseId,
-          message,
-          conversationId: conversationId ?? undefined,
-        })
-      ).data,
-    onSuccess: (data, message) => {
-      setConversationId(data.conversationId);
-      setMessages((prev) => [
-        ...prev,
-        { id: `local-user-${Date.now()}`, role: "USER", content: message, createdAt: new Date().toISOString() },
-        { id: `local-assistant-${Date.now()}`, role: "ASSISTANT", content: data.answer, sources: data.sources, createdAt: new Date().toISOString() },
-      ]);
-      queryClient.invalidateQueries({ queryKey: ["conversations", courseId] });
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
-
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, askMutation.isPending]);
+  }, [messages, isStreaming]);
 
-  function handleSend() {
+  async function handleSend() {
     const trimmed = input.trim();
-    if (!trimmed || askMutation.isPending) return;
+    if (!trimmed || isStreaming) return;
     setInput("");
-    askMutation.mutate(trimmed);
+
+    const userMessage: TutorMessage = { id: `local-user-${Date.now()}`, role: "USER", content: trimmed, createdAt: new Date().toISOString() };
+    const assistantId = `local-assistant-${Date.now()}`;
+    streamingMessageId.current = assistantId;
+    setMessages((prev) => [...prev, userMessage, { id: assistantId, role: "ASSISTANT", content: "", createdAt: new Date().toISOString() }]);
+    setIsStreaming(true);
+
+    await streamAsk(trimmed, assistantId);
+  }
+
+  async function streamAsk(message: string, assistantId: string) {
+    try {
+      const res = await fetch(`${api.defaults.baseURL}/ai/tutor/ask/stream`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId, message, conversationId: conversationId ?? undefined }),
+      });
+
+      if (!res.ok || !res.body) {
+        throw new Error(`Request failed with status ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      // eslint-disable-next-line no-constant-condition -- standard reader-loop pattern; exits via the `break` below
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? "";
+
+        for (const frame of frames) {
+          const line = frame.split("\n").find((l) => l.startsWith("data: "));
+          if (!line) continue;
+          const event: StreamEvent = JSON.parse(line.slice("data: ".length));
+
+          if (event.type === "chunk") {
+            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + event.text } : m)));
+          } else if (event.type === "done") {
+            setConversationId(event.conversationId);
+            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, sources: event.sources } : m)));
+            queryClient.invalidateQueries({ queryKey: ["conversations", courseId] });
+          } else if (event.type === "error") {
+            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: event.message } : m)));
+          }
+        }
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+      setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: "Something went wrong reaching the AI Tutor. Please try again." } : m)));
+    } finally {
+      setIsStreaming(false);
+      streamingMessageId.current = null;
+    }
   }
 
   function startNewConversation() {
@@ -151,42 +195,50 @@ export default function AITutorPage() {
                   <p className="text-sm">Ask anything about this course. Answers are grounded in the actual lesson material.</p>
                 </div>
               )}
-              {messages.map((m) => (
-                <div key={m.id} className={`flex ${m.role === "USER" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${m.role === "USER" ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-800"}`}>
-                    <Markdown text={m.content} />
-                    {m.sources && m.sources.length > 0 && (
-                      <div className="mt-3 space-y-1.5 border-t border-slate-200/70 pt-2.5">
-                        <p className="flex items-center gap-1 text-xs font-semibold text-slate-500">
-                          <BookOpen className="h-3 w-3" /> Sources
-                        </p>
-                        {m.sources.map((s, i) => (
-                          <div key={i} className="rounded-lg bg-white/60 px-2.5 py-1.5 text-xs text-slate-600">
-                            <span className="font-medium">{s.lessonTitle ?? s.documentTitle}</span> · similarity {s.similarity}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+              {messages.map((m) => {
+                const isLiveStreamingBubble = isStreaming && m.id === streamingMessageId.current;
+                return (
+                  <div key={m.id} className={`flex ${m.role === "USER" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${m.role === "USER" ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-800"}`}>
+                      {m.content.length === 0 && isLiveStreamingBubble ? (
+                        <span className="inline-flex items-center gap-1 text-slate-400">
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+                        </span>
+                      ) : (
+                        <>
+                          <Markdown text={m.content} />
+                          {isLiveStreamingBubble && <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-slate-400 align-text-bottom" />}
+                        </>
+                      )}
+                      {m.sources && m.sources.length > 0 && (
+                        <div className="mt-3 space-y-1.5 border-t border-slate-200/70 pt-2.5">
+                          <p className="flex items-center gap-1 text-xs font-semibold text-slate-500">
+                            <BookOpen className="h-3 w-3" /> Sources
+                          </p>
+                          {m.sources.map((s, i) => (
+                            <div key={i} className="rounded-lg bg-white/60 px-2.5 py-1.5 text-xs text-slate-600">
+                              <span className="font-medium">{s.lessonTitle ?? s.documentTitle}</span> · similarity {s.similarity}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {askMutation.isPending && (
-                <div className="flex justify-start">
-                  <div className="rounded-2xl bg-slate-100 px-4 py-3">
-                    <Spinner className="h-4 w-4" />
-                  </div>
-                </div>
-              )}
+                );
+              })}
             </div>
             <div className="flex items-center gap-3 border-t border-slate-100 p-4">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                disabled={isStreaming}
                 placeholder="Ask a question about this course..."
-                className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus-ring focus-visible:border-brand-500"
+                className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus-ring focus-visible:border-brand-500 disabled:bg-slate-50"
               />
-              <Button onClick={handleSend} isLoading={askMutation.isPending} icon={<Send className="h-4 w-4" />}>
+              <Button onClick={handleSend} isLoading={isStreaming} icon={<Send className="h-4 w-4" />}>
                 Send
               </Button>
             </div>

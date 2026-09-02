@@ -17,6 +17,14 @@ export interface LLMProvider {
   readonly name: string;
   readonly isConfigured: boolean;
   generate(params: GenerateParams): Promise<string>;
+  /**
+   * Streams the answer as it's generated, calling `onChunk` with each new
+   * piece of text as it arrives, and resolves with the full assembled text
+   * once generation finishes. This is what makes the AI Tutor feel like a
+   * real live conversation instead of a single multi-second blocking wait —
+   * time-to-first-token is what the user actually perceives as "working."
+   */
+  generateStream(params: GenerateParams, onChunk: (text: string) => void): Promise<string>;
 }
 
 class AnthropicProvider implements LLMProvider {
@@ -39,6 +47,20 @@ class AnthropicProvider implements LLMProvider {
     const textBlock = response.content.find((block) => block.type === "text");
     return textBlock && textBlock.type === "text" ? textBlock.text : "";
   }
+
+  async generateStream({ system, messages, maxTokens = 1024 }: GenerateParams, onChunk: (text: string) => void): Promise<string> {
+    const stream = this.client.messages.stream({
+      model: env.anthropicModel,
+      max_tokens: maxTokens,
+      system,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    });
+
+    stream.on("text", (text) => onChunk(text));
+    const finalMessage = await stream.finalMessage();
+    const textBlock = finalMessage.content.find((block) => block.type === "text");
+    return textBlock && textBlock.type === "text" ? textBlock.text : "";
+  }
 }
 
 class GeminiProvider implements LLMProvider {
@@ -50,11 +72,11 @@ class GeminiProvider implements LLMProvider {
     this.client = new GoogleGenAI({ apiKey: env.geminiApiKey });
   }
 
-  async generate({ system, messages, maxTokens = 1024 }: GenerateParams): Promise<string> {
-    const response = await this.client.models.generateContent({
+  private buildRequest(system: string, messages: ChatMessage[], maxTokens: number) {
+    return {
       model: env.geminiModel,
       contents: messages.map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
+        role: m.role === "assistant" ? ("model" as const) : ("user" as const),
         parts: [{ text: m.content }],
       })),
       config: {
@@ -75,9 +97,25 @@ class GeminiProvider implements LLMProvider {
         // fix is giving enough headroom for both thinking and the answer.)
         maxOutputTokens: maxTokens * 4,
       },
-    });
+    };
+  }
 
+  async generate({ system, messages, maxTokens = 1024 }: GenerateParams): Promise<string> {
+    const response = await this.client.models.generateContent(this.buildRequest(system, messages, maxTokens));
     return response.text ?? "";
+  }
+
+  async generateStream({ system, messages, maxTokens = 1024 }: GenerateParams, onChunk: (text: string) => void): Promise<string> {
+    const stream = await this.client.models.generateContentStream(this.buildRequest(system, messages, maxTokens));
+    let full = "";
+    for await (const chunk of stream) {
+      const text = chunk.text;
+      if (text) {
+        full += text;
+        onChunk(text);
+      }
+    }
+    return full;
   }
 }
 
@@ -91,7 +129,7 @@ class UnconfiguredProvider implements LLMProvider {
   readonly name = "none";
   readonly isConfigured = false;
 
-  async generate(): Promise<string> {
+  private message(): string {
     return (
       "The AI Tutor is not fully configured yet: no LLM provider credential was found in the " +
       "backend environment. Retrieval over course material is still working (see the sources " +
@@ -100,6 +138,28 @@ class UnconfiguredProvider implements LLMProvider {
       "in backend/.env, then restart the server."
     );
   }
+
+  async generate(): Promise<string> {
+    return this.message();
+  }
+
+  async generateStream(_params: GenerateParams, onChunk: (text: string) => void): Promise<string> {
+    const text = this.message();
+    onChunk(text);
+    return text;
+  }
+}
+
+/**
+ * Both the Anthropic and Gemini SDKs expose a numeric `.status` on thrown
+ * API errors. 429 covers both "too many requests per second" and, for
+ * Gemini's free tier specifically, a hard per-day request quota per model
+ * (as low as 20/day) — an account-level limit, not a bug. Distinguishing
+ * this from a generic failure lets the honest fallback message actually
+ * say what happened instead of a vague "temporary error."
+ */
+export function isRateLimitError(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "status" in err && (err as { status?: unknown }).status === 429;
 }
 
 let cached: LLMProvider | null = null;

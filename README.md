@@ -38,7 +38,7 @@ scores, no fake AI responses, and no "coming soon" screens.
 - Browse, search, and filter a real course catalog
 - Enroll, watch video lessons, read written material, track per-lesson progress
 - Take multiple-choice quizzes with real-time scoring, review, and attempt history
-- Ask an AI Tutor questions grounded in the *current course's* material, with cited sources
+- Ask an AI Tutor questions grounded in the *current course's* material, with cited sources — answers stream in live, token by token, and the tutor talks like a helpful human, not a formal citation-heavy report
 - Generate flashcards, summaries, key concepts, study plans, revision notes, and practice questions on demand
 - A dashboard that computes real stats: completion, quiz averages, streaks, weak topics, recommendations
 
@@ -98,7 +98,7 @@ five explicitly separated stages (see [`backend/src/services/ai`](backend/src/se
 2. **Cleaning & chunking** ([`chunking.ts`](backend/src/services/ai/chunking.ts)) — text is normalized and split into ~220-word overlapping windows (40-word overlap), balancing retrieval specificity against lost context at chunk boundaries.
 3. **Embedding & storage** ([`embeddingProvider.ts`](backend/src/services/ai/embeddingProvider.ts)) — each chunk is embedded and stored as a `vector(1536)` column via `pgvector`, indexed with HNSW for fast approximate nearest-neighbor search.
 4. **Retrieval** ([`retrieval.ts`](backend/src/services/ai/retrieval.ts)) — a query is embedded and matched via cosine distance (`<=>`), **scoped to the current course only** — verified directly in [`tests/api/rag.test.ts`](backend/tests/api/rag.test.ts), which asserts a Kubernetes question against a watercolor-painting course never returns Kubernetes content.
-5. **Prompt construction & generation** ([`tutorService.ts`](backend/src/services/ai/tutorService.ts)) — retrieved chunks are placed in the system prompt with explicit instructions to answer *only* from the provided context, cite sources inline, and say so plainly when the context doesn't cover the question, rather than guessing.
+5. **Prompt construction & generation** ([`tutorService.ts`](backend/src/services/ai/tutorService.ts)) — retrieved chunks are placed in the system prompt with instructions to answer *only* from the provided context in a warm, conversational voice (not a formal report), and to say so plainly when the context doesn't cover the question, rather than guessing. The answer is streamed back to the browser over Server-Sent Events as it's generated (`POST /api/ai/tutor/ask/stream`), so the student sees it appear live rather than waiting on one long blocking request.
 
 **Embeddings without an API key.** If `OPENAI_API_KEY` isn't set, the app
 doesn't disable RAG — it falls back to a deterministic signed
@@ -116,12 +116,18 @@ generation return a clear, honest message explaining what's missing and how
 to enable it — retrieval and its cited sources still work, only the
 natural-language generation step is unavailable. Nothing is faked.
 
-**Two LLM providers, verified.** `AI_PROVIDER=anthropic` and
-`AI_PROVIDER=gemini` are both implemented behind the same `LLMProvider`
-interface ([`llmProvider.ts`](backend/src/services/ai/llmProvider.ts)) and
-both have been exercised end to end against the real API in this project —
-grounded, cited AI Tutor answers, AI-generated flashcards, and AI-generated
-quiz questions all verified working through Gemini specifically.
+**Two LLM providers, verified — including the failure path.**
+`AI_PROVIDER=anthropic` and `AI_PROVIDER=gemini` are both implemented behind
+the same `LLMProvider` interface ([`llmProvider.ts`](backend/src/services/ai/llmProvider.ts)),
+and both were exercised end to end against the real API during development —
+grounded, cited, streamed AI Tutor answers, AI-generated flashcards, and
+AI-generated quiz questions all verified working through Gemini specifically.
+Development also hit Gemini's free-tier daily quota (as low as 20
+requests/day for a given model) partway through testing, which turned out to
+be a useful forcing function: it's what the honest, quota-aware fallback
+message described in [Known limitations](#known-limitations) was built
+against and verified with, rather than being a hypothetical error path that
+was never actually triggered.
 
 ## Authentication & authorization
 
@@ -339,7 +345,8 @@ Set `NODE_ENV=production` on the backend so cookies are marked `Secure` and serv
 ## Known limitations
 
 - **Local embedding fallback is lexical, not semantic.** Without `OPENAI_API_KEY`, retrieval rewards shared vocabulary rather than shared meaning — good enough to demonstrate a working end-to-end pipeline, not a substitute for a trained embedding model in a real product.
-- **No real-time push.** Progress and dashboard updates happen via query invalidation/refetch after an action (the simplest reliable mechanism for this scope), not a WebSocket/SSE stream. Nothing in the product needs sub-second cross-client updates.
+- **No real-time push for progress/dashboards.** Those update via query invalidation/refetch after an action (the simplest reliable mechanism for this scope), not a WebSocket. The AI Tutor is the exception — it streams its answer token-by-token over Server-Sent Events (`POST /api/ai/tutor/ask/stream`), the same way a real chat product does, rather than blocking on one large response.
+- **Free-tier LLM API keys have real, low rate/quota limits.** Google's Gemini free tier, for example, can cap a given model at as few as 20 requests/day per project. When a configured provider's quota is exhausted, the AI Tutor and study-resource generation detect the 429 response specifically and say so honestly ("the provider's quota is used up, not a bug in the app") rather than showing a generic error or, worse, silently falling back to a fake answer. Retrieval and citations keep working regardless — only the generation step is affected. A paid/billed API key (or a key with more headroom) resolves this immediately.
 - **Single quiz question type.** Multiple-choice only; no free-text or code-execution questions.
 - **AI-generated quizzes/resources are not fact-checked automatically** beyond being grounded in retrieved course text — an instructor is expected to review AI-generated quiz questions before publishing (the UI labels them accordingly).
 - **File uploads are stored as extracted text only** (not the original binary) — sufficient for RAG ingestion, not for serving the original PDF back to students.

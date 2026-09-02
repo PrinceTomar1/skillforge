@@ -1,10 +1,25 @@
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/errors";
-import { getLLMProvider, ChatMessage } from "./llmProvider";
+import { getLLMProvider, isRateLimitError, ChatMessage } from "./llmProvider";
 import { retrieveRelevantChunks, RetrievedChunk } from "./retrieval";
 import { logActivity } from "../activityService";
 
 const HISTORY_WINDOW = 6;
+
+const GENERIC_PROVIDER_ERROR_MESSAGE =
+  "The AI provider ran into a temporary error while generating a response. Your question and the " +
+  "retrieved sources below are saved — please try asking again in a moment.";
+
+const RATE_LIMIT_ERROR_MESSAGE =
+  "The AI provider's request quota is used up right now — this is an account-level rate/quota limit " +
+  "(common on free-tier API keys), not a bug in the app. Retrieval over your course material still " +
+  "worked (see the sources below); the answer just couldn't be generated yet. It typically resolves " +
+  "once the quota resets, or immediately if billing is enabled on the provider account. Please try " +
+  "again shortly.";
+
+function describeProviderFailure(err: unknown): string {
+  return isRateLimitError(err) ? RATE_LIMIT_ERROR_MESSAGE : GENERIC_PROVIDER_ERROR_MESSAGE;
+}
 
 function buildSystemPrompt(courseTitle: string, chunks: RetrievedChunk[]): string {
   if (chunks.length === 0) {
@@ -48,17 +63,15 @@ CONTEXT:
 ${context}`;
 }
 
-export async function askTutor(params: {
-  userId: string;
-  courseId: string;
-  conversationId?: string;
-  message: string;
-}): Promise<{
-  conversationId: string;
-  answer: string;
-  sources: Array<{ lessonId: string | null; lessonTitle: string | null; documentTitle: string; similarity: number; preview: string }>;
-  aiConfigured: boolean;
-}> {
+interface TutorSource {
+  lessonId: string | null;
+  lessonTitle: string | null;
+  documentTitle: string;
+  similarity: number;
+  preview: string;
+}
+
+async function prepareTurn(params: { userId: string; courseId: string; conversationId?: string; message: string }) {
   const { userId, courseId, message } = params;
 
   const course = await prisma.course.findUnique({ where: { id: courseId } });
@@ -69,7 +82,6 @@ export async function askTutor(params: {
     : await prisma.aIConversation.create({
         data: { userId, courseId, title: message.slice(0, 60) },
       });
-
   if (!conversation) throw ApiError.notFound("Conversation not found");
 
   const history = await prisma.aIMessage.findMany({
@@ -91,6 +103,44 @@ export async function askTutor(params: {
     { role: "user", content: message },
   ];
 
+  const sources: TutorSource[] = chunks.map((c) => ({
+    lessonId: c.lessonId,
+    lessonTitle: c.lessonTitle,
+    documentTitle: c.documentTitle,
+    similarity: c.similarity,
+    preview: c.content.slice(0, 220) + (c.content.length > 220 ? "…" : ""),
+  }));
+
+  return { conversation, systemPrompt, chatMessages, sources, courseId };
+}
+
+async function finalizeTurn(params: { userId: string; conversationId: string; courseId: string; answer: string; sources: TutorSource[]; message: string }) {
+  await prisma.aIMessage.create({
+    data: {
+      conversationId: params.conversationId,
+      role: "ASSISTANT",
+      content: params.answer,
+      sources: params.sources as unknown as object,
+    },
+  });
+
+  await prisma.aIConversation.update({ where: { id: params.conversationId }, data: { updatedAt: new Date() } });
+  await logActivity(params.userId, "AI_TUTOR_USED", params.courseId, { question: params.message.slice(0, 120) });
+}
+
+export async function askTutor(params: {
+  userId: string;
+  courseId: string;
+  conversationId?: string;
+  message: string;
+}): Promise<{
+  conversationId: string;
+  answer: string;
+  sources: TutorSource[];
+  aiConfigured: boolean;
+}> {
+  const { conversation, systemPrompt, chatMessages, sources } = await prepareTurn(params);
+
   const llm = getLLMProvider();
   let answer: string;
   try {
@@ -101,31 +151,39 @@ export async function askTutor(params: {
     // with no reply — the conversation still gets a real assistant turn,
     // just one that honestly explains generation failed and invites a retry.
     console.error("LLM generation failed:", err);
-    answer =
-      "The AI provider ran into a temporary error while generating a response (it may be rate-limited or " +
-      "experiencing high demand). Your question and the retrieved sources below are saved — please try asking again in a moment.";
+    answer = describeProviderFailure(err);
   }
 
-  const sources = chunks.map((c) => ({
-    lessonId: c.lessonId,
-    lessonTitle: c.lessonTitle,
-    documentTitle: c.documentTitle,
-    similarity: c.similarity,
-    preview: c.content.slice(0, 220) + (c.content.length > 220 ? "…" : ""),
-  }));
+  await finalizeTurn({ userId: params.userId, conversationId: conversation.id, courseId: params.courseId, answer, sources, message: params.message });
 
-  await prisma.aIMessage.create({
-    data: {
-      conversationId: conversation.id,
-      role: "ASSISTANT",
-      content: answer,
-      sources: sources as unknown as object,
-    },
-  });
+  return { conversationId: conversation.id, answer, sources, aiConfigured: llm.isConfigured };
+}
 
-  await prisma.aIConversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
+/**
+ * Same pipeline as askTutor, but streams the answer token-by-token via
+ * `onChunk` as it's generated instead of waiting for the whole thing. This
+ * is what makes the AI Tutor feel like a live conversation rather than a
+ * long blocking spinner — generation against a real LLM provider can
+ * legitimately take many seconds, and seeing text appear immediately is
+ * what tells a user it's actually working.
+ */
+export async function askTutorStream(
+  params: { userId: string; courseId: string; conversationId?: string; message: string },
+  onChunk: (text: string) => void,
+): Promise<{ conversationId: string; answer: string; sources: TutorSource[]; aiConfigured: boolean }> {
+  const { conversation, systemPrompt, chatMessages, sources } = await prepareTurn(params);
 
-  await logActivity(userId, "AI_TUTOR_USED", courseId, { question: message.slice(0, 120) });
+  const llm = getLLMProvider();
+  let answer: string;
+  try {
+    answer = await llm.generateStream({ system: systemPrompt, messages: chatMessages, maxTokens: 800 }, onChunk);
+  } catch (err) {
+    console.error("LLM streaming generation failed:", err);
+    answer = describeProviderFailure(err);
+    onChunk(answer);
+  }
+
+  await finalizeTurn({ userId: params.userId, conversationId: conversation.id, courseId: params.courseId, answer, sources, message: params.message });
 
   return { conversationId: conversation.id, answer, sources, aiConfigured: llm.isConfigured };
 }

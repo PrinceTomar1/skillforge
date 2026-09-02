@@ -1,5 +1,12 @@
 # SkillForge — AI-Powered Learning Platform
 
+**Live demo:** [skillforge-topaz-mu.vercel.app](https://skillforge-topaz-mu.vercel.app)
+(frontend on Vercel, API on Render, Postgres+pgvector on Neon — see
+[Deployment](#deployment) for the full setup and demo credentials below).
+The API is on Render's free tier, which sleeps after 15 minutes idle — the
+first request after a while can take 30–50s to wake it up; it's fast after
+that.
+
 A full-stack learning platform with course discovery, a real quiz engine,
 instructor/student dashboards, and an **AI Tutor built on a genuine
 Retrieval-Augmented Generation (RAG) pipeline** — course material is
@@ -345,13 +352,26 @@ to compute from immediately.
 
 ## Deployment
 
-This is a standard two-service deployment:
+This is a three-service deployment, and it's what's actually running at the
+[live demo](#skillforge--ai-powered-learning-platform) link above:
 
-1. **Database**: any managed Postgres with the `pgvector` extension available (e.g., a self-hosted Postgres 16 with `CREATE EXTENSION vector`, or a provider that supports it).
-2. **Backend**: build with `npm run build`, run `npx prisma migrate deploy` against the production database, then `node dist/server.js`. Set all required environment variables (see above) — never commit `.env`.
-3. **Frontend**: build with `npm run build` (set `VITE_API_URL` to your backend's public URL at build time), then serve the static `dist/` output from any static host or CDN.
+1. **Database — [Neon](https://neon.tech)**: serverless Postgres with native `pgvector` support, free tier. Created via `neonctl`, with `CREATE EXTENSION vector;` run once, then `npx prisma migrate deploy` and `npm run seed` pointed at its connection string.
+2. **Backend — [Render](https://render.com)**: a Docker-based Web Service (free tier) built from [`backend/Dockerfile`](backend/Dockerfile), deployed straight from this public GitHub repo (`rootDir: backend`) — see [`render.yaml`](render.yaml) for the service shape. [`docker-entrypoint.sh`](backend/docker-entrypoint.sh) runs `prisma migrate deploy` before starting the server on every boot, so schema changes ship automatically with each deploy.
+3. **Frontend — [Vercel](https://vercel.com)**: a static Vite build connected to the same repo, with `VITE_API_URL` set at build time to the Render service's public URL. [`frontend/vercel.json`](frontend/vercel.json) adds the SPA rewrite (`/* → /index.html`) that client-side routing needs — without it, a direct link to e.g. `/dashboard` 404s.
 
-Set `NODE_ENV=production` on the backend so cookies are marked `Secure` and served correctly behind HTTPS.
+**The one thing that will bite you in this split-origin setup**: the
+frontend and backend live on different domains (a Vercel domain calling a
+Render domain), which is genuinely cross-site, not just cross-port like
+local dev's Vite proxy. The session cookie has to be `SameSite=None;
+Secure` for the browser to attach it to cross-site API calls at all — `Lax`
+(fine for same-origin local dev) silently drops the cookie on every request
+after login, which looks exactly like "login doesn't work" with no server-side
+error to point at. See the `cookieOptions` comment in
+[`auth.routes.ts`](backend/src/routes/auth.routes.ts).
+
+Set `NODE_ENV=production` on the backend so cookies get both `Secure` and
+`SameSite=None`, and set `CORS_ORIGIN` to your exact frontend origin
+(`credentials: true` CORS requires an exact origin match, not `*`).
 
 ## Known limitations
 
@@ -359,6 +379,7 @@ Set `NODE_ENV=production` on the backend so cookies are marked `Secure` and serv
 - **No real-time push for progress/dashboards.** Those update via query invalidation/refetch after an action (the simplest reliable mechanism for this scope), not a WebSocket. The AI Tutor is the exception — it streams its answer token-by-token over Server-Sent Events (`POST /api/ai/tutor/ask/stream`), the same way a real chat product does, rather than blocking on one large response.
 - **Free-tier LLM API keys have real, low rate/quota limits.** Google's Gemini free tier, for example, can cap a given model at as few as 20 requests/day per project. When a configured provider's quota is exhausted, the AI Tutor and study-resource generation detect the 429 response specifically and say so honestly ("the provider's quota is used up, not a bug in the app") rather than showing a generic error or, worse, silently falling back to a fake answer. Retrieval and citations keep working regardless — only the generation step is affected. A paid/billed API key (or a key with more headroom) resolves this immediately.
 - **Single quiz question type.** Multiple-choice only; no free-text or code-execution questions.
+- **The live demo's backend sleeps when idle.** Render's free Web Service tier spins the container down after 15 minutes with no traffic; the first request after that takes 30–50s to cold-start while later requests are fast. A paid Render plan (or any always-on host) removes this — it's a free-tier tradeoff, not an architectural limitation.
 - **AI-generated quizzes/resources are not fact-checked automatically** beyond being grounded in retrieved course text — an instructor is expected to review AI-generated quiz questions before publishing (the UI labels them accordingly).
 - **File uploads are stored as extracted text only** (not the original binary) — sufficient for RAG ingestion, not for serving the original PDF back to students.
 

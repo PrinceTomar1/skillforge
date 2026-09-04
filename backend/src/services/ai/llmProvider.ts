@@ -13,6 +13,21 @@ export interface GenerateParams {
   maxTokens?: number;
 }
 
+// Bounds any SDK call so a request can never hang forever. Seen in
+// production on Render's free tier: the non-streaming Gemini call would
+// occasionally just never resolve or reject (no error of its own), which
+// hung the whole request instead of falling through to the honest error
+// message below.
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
 export interface LLMProvider {
   readonly name: string;
   readonly isConfigured: boolean;
@@ -37,12 +52,16 @@ class AnthropicProvider implements LLMProvider {
   }
 
   async generate({ system, messages, maxTokens = 1024 }: GenerateParams): Promise<string> {
-    const response = await this.client.messages.create({
-      model: env.anthropicModel,
-      max_tokens: maxTokens,
-      system,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-    });
+    const response = await withTimeout(
+      this.client.messages.create({
+        model: env.anthropicModel,
+        max_tokens: maxTokens,
+        system,
+        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      }),
+      30000,
+      "Anthropic generate",
+    );
 
     const textBlock = response.content.find((block) => block.type === "text");
     return textBlock && textBlock.type === "text" ? textBlock.text : "";
@@ -100,9 +119,15 @@ class GeminiProvider implements LLMProvider {
     };
   }
 
-  async generate({ system, messages, maxTokens = 1024 }: GenerateParams): Promise<string> {
-    const response = await this.client.models.generateContent(this.buildRequest(system, messages, maxTokens));
-    return response.text ?? "";
+  // Deliberately implemented on top of generateContentStream rather than
+  // the SDK's non-streaming generateContent. In production behind Render,
+  // the non-streaming call would sometimes just hang with no error — the
+  // streaming call never did, so this route calls it internally and
+  // discards the per-chunk callback rather than exposing that failure mode
+  // to every non-streaming caller (AI Tutor "ask", study resources, quiz
+  // generation).
+  async generate(params: GenerateParams): Promise<string> {
+    return withTimeout(this.generateStream(params, () => {}), 30000, "Gemini generate");
   }
 
   async generateStream({ system, messages, maxTokens = 1024 }: GenerateParams, onChunk: (text: string) => void): Promise<string> {

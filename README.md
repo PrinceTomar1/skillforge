@@ -27,8 +27,9 @@ Demo logins:
 - Search / filter the course catalog, enroll, watch video lessons + read notes
 - Per-lesson progress that persists and rolls up into course completion
 - Multiple-choice quizzes with real scoring, answer review and attempt history
-- Ask the AI Tutor questions about the course they're in — answers are grounded
-  in that course's material, cite their sources, and stream in as they generate
+- Ask the AI Tutor anything — it grounds answers in that course's material and
+  cites sources when the question is covered, and still answers (clearly
+  flagged as going beyond the course) when it isn't; answers stream in live
 - Generate study resources (summaries, flashcards, practice questions) from the
   course content
 - Dashboard with real stats: completion, quiz averages, streak, weak topics
@@ -61,10 +62,12 @@ Code is in [`backend/src/services/ai`](backend/src/services/ai). Roughly:
 4. **Retrieval** – the question is embedded and matched by cosine distance,
    **scoped to the current course only**. There's a test that asks a Kubernetes
    question against a watercolour-painting course and checks it gets nothing back.
-5. **Generation** – the retrieved chunks go into the system prompt with
-   instructions to answer only from that context and to say "I couldn't find
-   this in the course material" instead of guessing. The answer streams back
-   over Server-Sent Events.
+5. **Generation** – the retrieved chunks go into the system prompt as the
+   preferred source: ground the answer in them, and be explicit about the
+   boundary where it isn't. It doesn't just refuse a question outside the
+   course, though — a real tutor answers those too, from general knowledge,
+   and says plainly when it's doing that instead of quoting the lesson. The
+   answer streams back over Server-Sent Events.
 
 If no `OPENAI_API_KEY` is set, embeddings fall back to a deterministic
 hashing-trick vector — it's lexical not semantic, but the whole

@@ -133,7 +133,7 @@ export default function AITutorPage() {
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
             <Sparkles className="h-6 w-6 text-brand-600" /> AI Tutor
           </h1>
-          <p className="mt-1 text-slate-500">Ask questions grounded in your course material.</p>
+          <p className="mt-1 text-slate-500">Ask anything — grounded in your course material when it's covered, straight-up tutoring when it's not.</p>
         </div>
         <Select value={courseId} onChange={(e) => { setCourseId(e.target.value); setConversationId(null); setMessages([]); }} className="w-64">
           {enrollments?.length === 0 && <option value="">Enroll in a course first</option>}
@@ -192,7 +192,7 @@ export default function AITutorPage() {
               {messages.length === 0 && (
                 <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
                   <Sparkles className="mb-3 h-8 w-8" />
-                  <p className="text-sm">Ask anything about this course. Answers are grounded in the actual lesson material.</p>
+                  <p className="text-sm">Ask anything — about this course or beyond it. Answers use the lesson material when it's relevant, and it'll say so plainly when it's explaining something outside the course.</p>
                 </div>
               )}
               {messages.map((m) => {

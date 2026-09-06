@@ -59,7 +59,7 @@ class AnthropicProvider implements LLMProvider {
         system,
         messages: messages.map((m) => ({ role: m.role, content: m.content })),
       }),
-      45000,
+      60000,
       "Anthropic generate",
     );
 
@@ -127,7 +127,7 @@ class GeminiProvider implements LLMProvider {
   // to every non-streaming caller (AI Tutor "ask", study resources, quiz
   // generation).
   async generate(params: GenerateParams): Promise<string> {
-    return withTimeout(this.generateStream(params, () => {}), 45000, "Gemini generate");
+    return withTimeout(this.generateStream(params, () => {}), 60000, "Gemini generate");
   }
 
   async generateStream({ system, messages, maxTokens = 1024 }: GenerateParams, onChunk: (text: string) => void): Promise<string> {

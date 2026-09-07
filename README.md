@@ -1,5 +1,7 @@
 # SkillForge
 
+[![CI](https://github.com/PrinceTomar1/skillforge/actions/workflows/ci.yml/badge.svg)](https://github.com/PrinceTomar1/skillforge/actions/workflows/ci.yml)
+
 An AI-powered learning platform I built during my internship at Celebal
 Technologies. Students can browse courses, watch lessons, take quizzes and
 track their progress; instructors can build courses and see how their
@@ -129,6 +131,11 @@ cd ../frontend && npm test     # 15 tests
 
 Covers auth, course ownership checks, quiz scoring, RAG course-scoping, the
 streaming endpoint, and the no-key fallback.
+
+All of this — typecheck, lint, test, build, both apps — runs on every push via
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)),
+against a real Postgres+pgvector service container, not just locally before I
+remember to check.
 
 ## Notes / things I'd still do
 

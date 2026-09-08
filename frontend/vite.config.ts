@@ -11,6 +11,13 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    // Without this, Playwright's own output (test-results/, playwright-report/)
+    // landing inside this directory during an e2e run triggers a dev-server
+    // restart mid-test, which looks like a flaky test but is actually Vite
+    // reacting to its own test's output.
+    watch: {
+      ignored: ["**/test-results/**", "**/playwright-report/**", "**/e2e/**"],
+    },
   },
   build: {
     rollupOptions: {

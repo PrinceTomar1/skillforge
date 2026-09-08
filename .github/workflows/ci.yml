@@ -96,7 +96,11 @@ jobs:
     env:
       DATABASE_URL: postgresql://skillforge:skillforge@localhost:5432/skillforge_e2e
       JWT_SECRET: ci-only-secret-not-used-anywhere-real
-      NODE_ENV: production
+      # NOT NODE_ENV=production here: `npm ci` treats that as a signal to
+      # skip devDependencies, which took tsx out of the install and broke
+      # `npm run seed` / `npm run dev` (both run through tsx) with a
+      # bare "tsx: not found" — same class of bug as the Vercel deploy
+      # break, just a different tool tripping the same npm behavior.
       PORT: 4000
       CORS_ORIGIN: http://localhost:5173
 
